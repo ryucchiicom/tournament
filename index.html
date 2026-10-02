@@ -1,0 +1,3309 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="ランダム配置されたトーナメントで勝敗を入力し、順位を決定していくツール">
+  <title>トーナメント順位決定</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0c1020;
+      --panel: #151b31;
+      --text: #f4f6ff;
+      --muted: #9ca8c8;
+      --line: #303b63;
+      --accent: #6ea8ff;
+      --accent2: #88b8ff;
+      --win: #46d58b;
+      --gold: #ffd66b;
+      --shadow: 0 16px 50px rgba(0,0,0,.3);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+    }
+
+    body {
+      background:
+        radial-gradient(circle at top, #161d38 0, var(--bg) 48%, #080b15 100%);
+      color: var(--text);
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+      line-height: 1.5;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .title-wrap h1 {
+      margin: 0;
+      font-size: clamp(24px, 4vw, 36px);
+      letter-spacing: -.02em;
+    }
+
+    .subtitle {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .version {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .panel {
+      background: rgba(21,27,49,.9);
+      border: 1px solid rgba(133,151,200,.18);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .setup {
+      padding: 18px;
+    }
+
+    .grid-setup {
+      display: grid;
+      grid-template-columns:
+        minmax(0, 1.4fr)
+        minmax(280px, .8fr);
+      gap: 18px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: #dfe5ff;
+      margin-bottom: 7px;
+    }
+
+    textarea,
+    input[type="text"] {
+      width: 100%;
+      background: #0d1327;
+      color: var(--text);
+      border: 1px solid var(--line);
+      outline: none;
+      border-radius: 12px;
+      padding: 12px 13px;
+    }
+
+    textarea {
+      min-height: 230px;
+      resize: vertical;
+    }
+
+    textarea:focus,
+    input[type="text"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(110,168,255,.14);
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    .hint {
+      margin: 6px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .seed-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+
+    .btn {
+      border: 1px solid rgba(255,255,255,.12);
+      background: #202a49;
+      color: var(--text);
+      border-radius: 11px;
+      padding: 10px 13px;
+      cursor: pointer;
+      transition:
+        transform .08s ease,
+        background .15s ease,
+        border-color .15s ease;
+    }
+
+    .btn:hover {
+      background: #273355;
+      border-color: rgba(255,255,255,.2);
+    }
+
+    .btn:active {
+      transform: scale(.98);
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      color: #071022;
+      border-color: transparent;
+      font-weight: 800;
+    }
+
+    .btn.primary:hover {
+      background: var(--accent2);
+    }
+
+    .btn.ghost {
+      background: transparent;
+    }
+
+    .btn.danger {
+      background: #3b2030;
+      color: #ffdce5;
+    }
+
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0e1428;
+      margin-bottom: 14px;
+    }
+
+    .switch-copy strong {
+      display: block;
+      font-size: 14px;
+    }
+
+    .switch-copy span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .switch {
+      position: relative;
+      width: 50px;
+      height: 30px;
+      flex: 0 0 auto;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: #303957;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: .18s;
+    }
+
+    .slider:before {
+      content: "";
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      left: 3px;
+      top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: .18s;
+      box-shadow: 0 3px 8px rgba(0,0,0,.35);
+    }
+
+    .switch input:checked + .slider {
+      background: var(--accent);
+    }
+
+    .switch input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+
+    .actions {
+      display: flex;
+      gap: 9px;
+      flex-wrap: wrap;
+    }
+
+    .status {
+      margin-top: 12px;
+      min-height: 20px;
+      color: #ffb6c3;
+      font-size: 13px;
+    }
+
+    .generated {
+      display: none;
+    }
+
+    .generated.show {
+      display: block;
+    }
+
+    .info-bar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    .stat {
+      padding: 12px 14px;
+      background: rgba(21,27,49,.84);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+
+    .stat .k {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .stat .v {
+      margin-top: 2px;
+      font-weight: 800;
+      font-size: 17px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .content-panel {
+      min-width: 0;
+      padding: 16px;
+    }
+
+    .side-panel {
+      padding: 16px;
+      position: sticky;
+      top: 12px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+
+    .section-head .small {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .bracket-scroll {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 10px;
+    }
+
+    .bracket {
+      display: flex;
+      gap: 26px;
+      align-items: stretch;
+      min-width: max-content;
+      padding: 8px 4px 14px;
+    }
+
+    .round {
+      width: 240px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .round-title {
+      color: #cfd8f7;
+      font-weight: 800;
+      font-size: 14px;
+      margin-bottom: 10px;
+      padding: 0 4px;
+    }
+
+    .round-sub {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .round-matches {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-around;
+      gap: 12px;
+    }
+
+    .match {
+      position: relative;
+      background: #0e1428;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 8px;
+      box-shadow: 0 8px 22px rgba(0,0,0,.16);
+    }
+
+    .match.resolved {
+      border-color: rgba(70,213,139,.34);
+    }
+
+    .match.bye {
+      border-color: rgba(255,214,107,.34);
+    }
+
+    .match.inactive {
+      opacity: .45;
+    }
+
+    .match-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      margin: 0 4px 5px;
+    }
+
+    .player-row {
+      display: grid;
+      grid-template-columns: 34px minmax(0,1fr);
+      gap: 8px;
+      align-items: center;
+      min-height: 44px;
+      border-radius: 10px;
+      padding: 4px 5px;
+    }
+
+    .player-row + .player-row {
+      border-top: 1px solid rgba(255,255,255,.07);
+    }
+
+    .player-row.winner {
+      background: rgba(70,213,139,.11);
+    }
+
+    .player-row.loser {
+      opacity: .56;
+    }
+
+    .player-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+    }
+
+    .pick-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 1px solid #55658f;
+      background: #1a2440;
+      color: #dbe4ff;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      font-weight: 900;
+      line-height: 1;
+      padding: 0;
+      transition: .12s;
+    }
+
+    .pick-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      background: #21345d;
+      transform: scale(1.04);
+    }
+
+    .pick-btn:disabled {
+      cursor: default;
+      opacity: .26;
+    }
+
+    .player-row.winner .pick-btn {
+      background: var(--win);
+      border-color: transparent;
+      color: #08170f;
+    }
+
+    .player-row.loser .pick-btn {
+      background: #343c52;
+      border-color: transparent;
+      color: #aab2c5;
+    }
+
+    .bye-note {
+      color: var(--gold);
+      font-size: 11px;
+      padding: 2px 5px 0 43px;
+    }
+
+    .reverse-wrap {
+      margin-top: 26px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .lower-groups {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .lower-group {
+      background: rgba(10,14,28,.42);
+      border: 1px solid rgba(133,151,200,.16);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .lower-group h3 {
+      margin: 0 0 10px;
+      font-size: 14px;
+    }
+
+    .lower-meta {
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 10px;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 18px 4px;
+    }
+
+    .ranking {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .rank-item {
+      display: grid;
+      grid-template-columns: 54px minmax(0,1fr);
+      gap: 8px;
+      align-items: center;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      background: #0e1428;
+      border-radius: 11px;
+    }
+
+    .rank-no {
+      font-weight: 900;
+      text-align: center;
+      color: #dce5ff;
+    }
+
+    .rank-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .rank-tag {
+      display: inline-block;
+      margin-left: 7px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .rank-item.gold {
+      border-color: rgba(255,214,107,.42);
+    }
+
+    .rank-item.gold .rank-no {
+      color: var(--gold);
+    }
+
+    .rules {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
+
+    .rules h3 {
+      margin: 0 0 7px;
+      font-size: 13px;
+    }
+
+    .rules p {
+      margin: 6px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .seed-display {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .seed-box {
+      min-width: 0;
+      flex: 1;
+      background: #0d1327;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      padding: 7px 8px;
+      font:
+        12px ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        monospace;
+      overflow: auto;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 980px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .side-panel {
+        position: static;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .app {
+        padding: 12px;
+      }
+
+      .grid-setup {
+        grid-template-columns: 1fr;
+      }
+
+      textarea {
+        min-height: 180px;
+      }
+
+      .info-bar {
+        grid-template-columns: repeat(2,minmax(0,1fr));
+      }
+
+      .round {
+        width: 222px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="app">
+
+    <header class="topbar">
+      <div class="title-wrap">
+        <h1>トーナメント順位決定</h1>
+        <p class="subtitle">
+          ◯を押して勝者を決定。下位決定をONにすると敗者側の逆トーナメントも自動生成。
+        </p>
+      </div>
+
+      <div class="version">v1.0.0</div>
+    </header>
+
+
+    <section class="panel setup" id="setupPanel">
+      <div class="grid-setup">
+
+        <div>
+          <div class="field">
+            <label for="names">
+              参加者一覧（1行に1人）
+            </label>
+
+            <textarea
+              id="names"
+              spellcheck="false"
+              placeholder="A&#10;B&#10;C&#10;D&#10;E&#10;F&#10;G&#10;H"></textarea>
+
+            <p class="hint">
+              人数は2人以上。
+              人数が2のべき乗でなくてもOK。
+              足りない枠はランダムな位置にBYEを入れる。
+            </p>
+          </div>
+        </div>
+
+
+        <div>
+
+          <div class="field">
+            <label for="seed">
+              シード（空欄なら公正なランダムシードを自動生成）
+            </label>
+
+            <div class="seed-row">
+              <input
+                id="seed"
+                type="text"
+                placeholder="例: 2026-10-02-大会A">
+
+              <button
+                class="btn"
+                id="randomSeedBtn"
+                type="button">
+                ランダム生成
+              </button>
+            </div>
+
+            <p class="hint">
+              種なし：
+              暗号学的乱数でシードを作成
+              →そのシードからFisher–Yatesで配置。
+              種あり：
+              同じ入力なら同じ配置を再現。
+            </p>
+          </div>
+
+
+          <div class="switch-row">
+
+            <div class="switch-copy">
+              <strong>下位を決定</strong>
+              <span>
+                各ラウンドの最初の敗者から逆トーナメントを生成
+              </span>
+            </div>
+
+            <label
+              class="switch"
+              aria-label="下位を決定">
+
+              <input
+                id="lowerEnabled"
+                type="checkbox">
+
+              <span class="slider"></span>
+            </label>
+
+          </div>
+
+
+          <div class="actions">
+
+            <button
+              class="btn primary"
+              id="generateBtn"
+              type="button">
+              トーナメントを生成
+            </button>
+
+            <button
+              class="btn ghost"
+              id="exampleBtn"
+              type="button">
+              8人の例
+            </button>
+
+          </div>
+
+          <div
+            class="status"
+            id="status"></div>
+
+        </div>
+
+      </div>
+    </section>
+
+
+    <section
+      class="generated"
+      id="generated">
+
+      <div class="info-bar">
+
+        <div class="stat">
+          <div class="k">参加者</div>
+          <div class="v" id="statPlayers">-</div>
+        </div>
+
+        <div class="stat">
+          <div class="k">枠数</div>
+          <div class="v" id="statSlots">-</div>
+        </div>
+
+        <div class="stat">
+          <div class="k">本戦ラウンド</div>
+          <div class="v" id="statRounds">-</div>
+        </div>
+
+        <div class="stat">
+          <div class="k">下位決定</div>
+          <div class="v" id="statLower">-</div>
+        </div>
+
+      </div>
+
+
+      <div class="workspace">
+
+        <section class="panel content-panel">
+
+          <div class="section-head">
+
+            <div>
+              <h2>本戦</h2>
+              <div class="small">
+                ◯を押すと、その人が勝者として次のラウンドへ進む
+              </div>
+            </div>
+
+            <button
+              class="btn danger"
+              id="resetResultsBtn"
+              type="button">
+              結果をリセット
+            </button>
+
+          </div>
+
+
+          <div class="bracket-scroll">
+            <div
+              class="bracket"
+              id="mainBracket"></div>
+          </div>
+
+
+          <div
+            class="reverse-wrap"
+            id="reverseWrap"
+            style="display:none">
+
+            <div class="section-head">
+
+              <div>
+                <h2>逆トーナメント（下位決定）</h2>
+
+                <div class="small">
+                  本戦の各ラウンドで最初に負けた人たちが、
+                  そのラウンド内の順位を争う
+                </div>
+              </div>
+
+            </div>
+
+            <div
+              class="lower-groups"
+              id="lowerGroups"></div>
+
+          </div>
+
+        </section>
+
+
+        <aside class="panel side-panel">
+
+          <div class="section-head">
+
+            <div>
+              <h2>順位</h2>
+
+              <div class="small">
+                確定した順位から上に表示
+              </div>
+            </div>
+
+          </div>
+
+
+          <div class="seed-display">
+
+            <div
+              class="seed-box"
+              id="seedDisplay">-</div>
+
+            <button
+              class="btn"
+              id="copySeedBtn"
+              type="button">
+              コピー
+            </button>
+
+          </div>
+
+
+          <p
+            class="hint"
+            style="margin:7px 0 13px">
+
+            このシードと参加者一覧が同じなら、
+            配置を再現できる。
+          </p>
+
+
+          <ol
+            class="ranking"
+            id="ranking"></ol>
+
+
+          <div class="rules">
+
+            <h3>順位の見え方</h3>
+
+            <p>
+              本戦だけ：
+              同じラウンドで負けた人は
+              「○–○位」の候補になる。
+            </p>
+
+            <p>
+              下位決定ON：
+              そのラウンドの敗者で
+              逆トーナメントを進めると、
+              候補が順番に狭まる。
+            </p>
+
+            <p>
+              同じ逆トーナメントの同じラウンドで
+              複数人が負けた場合は、
+              追加の直接対戦がないため、
+              その範囲で表示する。
+            </p>
+
+          </div>
+
+        </aside>
+
+      </div>
+    </section>
+
+  </main>
+
+
+  <script>
+    'use strict';
+
+
+    const VERSION = '1.0.0';
+
+
+    const $ = (sel) =>
+      document.querySelector(sel);
+
+
+    const state = {
+      participants: [],
+      seed: '',
+      lowerEnabled: false,
+      size: 0,
+      mainRounds: [],
+      lowerGroups: []
+    };
+
+
+    /*
+      64bit FNV-1a hash
+
+      シード文字列を再現可能な64bit値にする。
+    */
+    function hash64(str) {
+      let h = 14695981039346656037n;
+
+      const prime = 1099511628211n;
+      const mask = 0xffffffffffffffffn;
+
+      const bytes =
+        new TextEncoder().encode(str);
+
+      for (const b of bytes) {
+        h ^= BigInt(b);
+        h = (h * prime) & mask;
+      }
+
+      return h || 1n;
+    }
+
+
+    /*
+      64bit RNG
+
+      同じシードなら完全に同じ乱数列になる。
+    */
+    class RNG64 {
+
+      constructor(seedString) {
+        this.state =
+          hash64(seedString);
+      }
+
+
+      next64() {
+
+        let x = this.state;
+
+        x ^= (x >> 12n);
+        x ^= (x << 25n) & 0xffffffffffffffffn;
+        x ^= (x >> 27n);
+
+        this.state =
+          x & 0xffffffffffffffffn;
+
+        return (
+          this.state *
+          2685821657736338717n
+        ) &
+        0xffffffffffffffffn;
+      }
+
+
+      /*
+        modulo biasをできるだけ避けて
+        0～maxExclusive-1を返す。
+      */
+      int(maxExclusive) {
+
+        if (
+          !Number.isInteger(maxExclusive) ||
+          maxExclusive <= 0
+        ) {
+          throw new Error(
+            '乱数範囲が不正です。'
+          );
+        }
+
+        const max =
+          BigInt(maxExclusive);
+
+        const full =
+          1n << 64n;
+
+        const limit =
+          full - (full % max);
+
+        let x;
+
+        do {
+          x = this.next64();
+        } while (
+          x >= limit
+        );
+
+        return Number(
+          x % max
+        );
+      }
+    }
+
+
+    /*
+      暗号学的乱数から
+      128bitのシード文字列を生成。
+    */
+    function randomSeed() {
+
+      const bytes =
+        new Uint8Array(16);
+
+      crypto.getRandomValues(bytes);
+
+      return Array.from(
+        bytes,
+        b =>
+          b
+            .toString(16)
+            .padStart(2, '0')
+      ).join('');
+    }
+
+
+    /*
+      Fisher–Yatesシャッフル
+
+      シードが同じなら同じ結果になる。
+    */
+    function shuffleFair(items, seed) {
+
+      const arr =
+        [...items];
+
+      const rng =
+        new RNG64(seed);
+
+      for (
+        let i = arr.length - 1;
+        i > 0;
+        i--
+      ) {
+
+        const j =
+          rng.int(i + 1);
+
+        [
+          arr[i],
+          arr[j]
+        ] = [
+          arr[j],
+          arr[i]
+        ];
+      }
+
+      return arr;
+    }
+
+
+    /*
+      次に大きい2のべき乗。
+    */
+    function nextPow2(n) {
+
+      let p = 1;
+
+      while (p < n) {
+        p *= 2;
+      }
+
+      return p;
+    }
+
+
+    /*
+      試合オブジェクト生成。
+    */
+    function createMatch(
+      round,
+      index,
+      p1 = null,
+      p2 = null
+    ) {
+
+      return {
+        id: `r${round}m${index}`,
+        round,
+        index,
+        p1,
+        p2,
+        winner: null,
+        loser: null,
+        status: 'pending',
+        // pending / resolved / inactive
+        bye: false
+      };
+    }
+
+
+    /*
+      初期状態判定。
+
+      一方だけ存在する場合はBYEとして
+      自動的に次へ進む。
+    */
+    function setInitialMatchStatus(match) {
+
+      if (
+        !match.p1 &&
+        !match.p2
+      ) {
+        match.status =
+          'inactive';
+
+        return;
+      }
+
+
+      if (
+        match.p1 &&
+        !match.p2
+      ) {
+
+        match.status =
+          'resolved';
+
+        match.winner =
+          match.p1;
+
+        match.loser = null;
+
+        match.bye = true;
+
+        return;
+      }
+
+
+      if (
+        !match.p1 &&
+        match.p2
+      ) {
+
+        match.status =
+          'resolved';
+
+        match.winner =
+          match.p2;
+
+        match.loser = null;
+
+        match.bye = true;
+
+        return;
+      }
+
+
+      match.status =
+        'pending';
+    }
+
+
+    /*
+      本戦ブラケットを作る。
+
+      BYEも含めた全枠を一緒にシャッフルすることで、
+      BYE位置も固定末尾にならずランダムになる。
+    */
+    function buildMainBracket() {
+
+      const {
+        size,
+        participants
+      } = state;
+
+
+      const baseSlots =
+        participants.concat(
+          Array(
+            size - participants.length
+          ).fill(null)
+        );
+
+
+      /*
+        参加者だけでなくBYE枠も
+        一緒にシャッフル。
+      */
+      const slots =
+        shuffleFair(
+          baseSlots,
+          state.seed
+        );
+
+
+      state.shuffled =
+        slots.filter(Boolean);
+
+      state.slots =
+        slots;
+
+
+      state.mainRounds = [];
+
+
+      const totalRounds =
+        Math.log2(size);
+
+
+      for (
+        let r = 0;
+        r < totalRounds;
+        r++
+      ) {
+
+        const count =
+          size /
+          (2 ** (r + 1));
+
+        const matches = [];
+
+
+        for (
+          let i = 0;
+          i < count;
+          i++
+        ) {
+
+          if (r === 0) {
+
+            matches.push(
+              createMatch(
+                r,
+                i,
+                slots[i * 2],
+                slots[i * 2 + 1]
+              )
+            );
+
+          } else {
+
+            matches.push(
+              createMatch(
+                r,
+                i
+              )
+            );
+          }
+        }
+
+
+        state.mainRounds.push(
+          matches
+        );
+      }
+
+
+      for (
+        const m of state.mainRounds[0]
+      ) {
+
+        setInitialMatchStatus(m);
+      }
+
+
+      updateMainFlow();
+    }
+
+
+    /*
+      前ラウンドの勝者を
+      次ラウンドへ流す。
+    */
+    function updateMainFlow() {
+
+      for (
+        let r = 1;
+        r < state.mainRounds.length;
+        r++
+      ) {
+
+        const prev =
+          state.mainRounds[r - 1];
+
+        const current =
+          state.mainRounds[r];
+
+
+        for (
+          let i = 0;
+          i < current.length;
+          i++
+        ) {
+
+          const a =
+            prev[i * 2];
+
+          const b =
+            prev[i * 2 + 1];
+
+          const m =
+            current[i];
+
+
+          if (!a || !b) {
+
+            m.p1 = null;
+            m.p2 = null;
+
+            m.winner = null;
+            m.loser = null;
+
+            m.status =
+              'inactive';
+
+            m.bye = false;
+
+            continue;
+          }
+
+
+          /*
+            前の2試合のどちらかが未決定なら
+            この試合も未決定。
+          */
+          if (
+            a.status === 'pending' ||
+            b.status === 'pending'
+          ) {
+
+            m.p1 =
+              a.status === 'resolved'
+                ? a.winner
+                : null;
+
+            m.p2 =
+              b.status === 'resolved'
+                ? b.winner
+                : null;
+
+            m.winner = null;
+            m.loser = null;
+
+            m.status =
+              'pending';
+
+            m.bye = false;
+
+            continue;
+          }
+
+
+          m.p1 =
+            a.winner || null;
+
+          m.p2 =
+            b.winner || null;
+
+
+          if (
+            !m.p1 &&
+            !m.p2
+          ) {
+
+            m.status =
+              'inactive';
+
+            m.winner = null;
+            m.loser = null;
+
+            m.bye = false;
+
+          } else if (
+            m.p1 &&
+            !m.p2
+          ) {
+
+            m.status =
+              'resolved';
+
+            m.winner =
+              m.p1;
+
+            m.loser = null;
+
+            m.bye = true;
+
+          } else if (
+            !m.p1 &&
+            m.p2
+          ) {
+
+            m.status =
+              'resolved';
+
+            m.winner =
+              m.p2;
+
+            m.loser = null;
+
+            m.bye = true;
+
+          } else {
+
+            m.status =
+              'pending';
+
+            m.winner = null;
+            m.loser = null;
+
+            m.bye = false;
+          }
+        }
+      }
+    }
+
+
+    /*
+      本戦の試合結果を決定。
+    */
+    function resolveMain(
+      match,
+      player
+    ) {
+
+      if (
+        !match ||
+        match.status !== 'pending' ||
+        !match.p1 ||
+        !match.p2
+      ) {
+        return;
+      }
+
+
+      if (
+        player !== match.p1 &&
+        player !== match.p2
+      ) {
+        return;
+      }
+
+
+      match.winner =
+        player;
+
+
+      match.loser =
+        player === match.p1
+          ? match.p2
+          : match.p1;
+
+
+      match.status =
+        'resolved';
+
+
+      match.bye =
+        false;
+
+
+      updateMainFlow();
+
+      rebuildLowerGroups();
+
+      renderAll();
+    }
+
+
+    /*
+      敗者グループ用の
+      逆トーナメント作成。
+    */
+    function createBracketGroup(
+      players,
+      groupId,
+      startRank
+    ) {
+
+      const size =
+        nextPow2(
+          players.length
+        );
+
+
+      const rounds = [];
+
+
+      const slots =
+        players.concat(
+          Array(
+            size - players.length
+          ).fill(null)
+        );
+
+
+      const totalRounds =
+        Math.log2(size);
+
+
+      for (
+        let r = 0;
+        r < totalRounds;
+        r++
+      ) {
+
+        const count =
+          size /
+          (2 ** (r + 1));
+
+        const matches = [];
+
+
+        for (
+          let i = 0;
+          i < count;
+          i++
+        ) {
+
+          const m =
+            createMatch(
+              r,
+              i,
+              r === 0
+                ? slots[i * 2]
+                : null,
+              r === 0
+                ? slots[i * 2 + 1]
+                : null
+            );
+
+          matches.push(m);
+        }
+
+
+        rounds.push(matches);
+      }
+
+
+      if (rounds.length) {
+
+        for (
+          const m of rounds[0]
+        ) {
+
+          setInitialMatchStatus(m);
+        }
+      }
+
+
+      return {
+        id: groupId,
+        players: [...players],
+        startRank,
+        endRank:
+          startRank +
+          players.length -
+          1,
+        size,
+        rounds
+      };
+    }
+
+
+    /*
+      逆トーナメント内の
+      勝者を次へ流す。
+    */
+    function updateGroupFlow(group) {
+
+      for (
+        let r = 1;
+        r < group.rounds.length;
+        r++
+      ) {
+
+        const prev =
+          group.rounds[r - 1];
+
+        const current =
+          group.rounds[r];
+
+
+        for (
+          let i = 0;
+          i < current.length;
+          i++
+        ) {
+
+          const a =
+            prev[i * 2];
+
+          const b =
+            prev[i * 2 + 1];
+
+          const m =
+            current[i];
+
+
+          if (!a || !b) {
+
+            m.p1 = null;
+            m.p2 = null;
+
+            m.winner = null;
+            m.loser = null;
+
+            m.status =
+              'inactive';
+
+            m.bye = false;
+
+            continue;
+          }
+
+
+          if (
+            a.status === 'pending' ||
+            b.status === 'pending'
+          ) {
+
+            m.p1 =
+              a.status === 'resolved'
+                ? a.winner
+                : null;
+
+            m.p2 =
+              b.status === 'resolved'
+                ? b.winner
+                : null;
+
+            m.winner = null;
+            m.loser = null;
+
+            m.status =
+              'pending';
+
+            m.bye = false;
+
+            continue;
+          }
+
+
+          m.p1 =
+            a.winner || null;
+
+          m.p2 =
+            b.winner || null;
+
+
+          if (
+            !m.p1 &&
+            !m.p2
+          ) {
+
+            m.status =
+              'inactive';
+
+            m.winner = null;
+            m.loser = null;
+
+            m.bye = false;
+
+          } else if (
+            m.p1 &&
+            !m.p2
+          ) {
+
+            m.status =
+              'resolved';
+
+            m.winner =
+              m.p1;
+
+            m.loser = null;
+
+            m.bye = true;
+
+          } else if (
+            !m.p1 &&
+            m.p2
+          ) {
+
+            m.status =
+              'resolved';
+
+            m.winner =
+              m.p2;
+
+            m.loser = null;
+
+            m.bye = true;
+
+          } else {
+
+            m.status =
+              'pending';
+
+            m.winner = null;
+            m.loser = null;
+
+            m.bye = false;
+          }
+        }
+      }
+    }
+
+
+    /*
+      逆トーナメントの結果決定。
+    */
+    function resolveLower(
+      group,
+      match,
+      player
+    ) {
+
+      if (
+        !match ||
+        match.status !== 'pending' ||
+        !match.p1 ||
+        !match.p2
+      ) {
+        return;
+      }
+
+
+      if (
+        player !== match.p1 &&
+        player !== match.p2
+      ) {
+        return;
+      }
+
+
+      match.winner =
+        player;
+
+
+      match.loser =
+        player === match.p1
+          ? match.p2
+          : match.p1;
+
+
+      match.status =
+        'resolved';
+
+
+      match.bye =
+        false;
+
+
+      updateGroupFlow(group);
+
+      renderAll();
+    }
+
+
+    /*
+      本戦の各ラウンドで出た敗者から
+      逆トーナメントを再構築。
+    */
+    function rebuildLowerGroups() {
+
+      if (!state.lowerEnabled) {
+
+        state.lowerGroups = [];
+
+        return;
+      }
+
+
+      /*
+        すでに入力済みの逆トーナメント結果を
+        可能な範囲で保存。
+      */
+      const oldResults =
+        new Map();
+
+
+      for (
+        const g of state.lowerGroups
+      ) {
+
+        for (
+          const round of g.rounds
+        ) {
+
+          for (
+            const m of round
+          ) {
+
+            if (
+              m.status === 'resolved' &&
+              m.p1 &&
+              m.p2
+            ) {
+
+              oldResults.set(
+                `${g.id}|${m.id}|${m.p1}|${m.p2}`,
+                m.winner
+              );
+
+              oldResults.set(
+                `${g.id}|${m.id}|${m.p2}|${m.p1}`,
+                m.winner
+              );
+            }
+          }
+        }
+      }
+
+
+      const groups = [];
+
+
+      let eliminated = 0;
+
+
+      for (
+        let r = 0;
+        r < state.mainRounds.length;
+        r++
+      ) {
+
+        const round =
+          state.mainRounds[r];
+
+
+        const complete =
+          round.every(
+            m =>
+              m.status === 'resolved' ||
+              m.status === 'inactive'
+          );
+
+
+        /*
+          このラウンドが終わっていないなら、
+          ここより後の敗者はまだ存在しない。
+        */
+        if (!complete) {
+          break;
+        }
+
+
+        const losers =
+          round
+            .filter(
+              m =>
+                m.status === 'resolved' &&
+                m.loser
+            )
+            .map(
+              m => m.loser
+            );
+
+
+        if (!losers.length) {
+          continue;
+        }
+
+
+        const startRank =
+          state.participants.length -
+          eliminated -
+          losers.length +
+          1;
+
+
+        const group =
+          createBracketGroup(
+            losers,
+            `lower-r${r}`,
+            startRank
+          );
+
+
+        groups.push(group);
+
+        eliminated +=
+          losers.length;
+      }
+
+
+      /*
+        組み合わせがそのままなら
+        以前の結果を復元。
+      */
+      for (
+        const g of groups
+      ) {
+
+        for (
+          const round of g.rounds
+        ) {
+
+          for (
+            const m of round
+          ) {
+
+            if (
+              m.status === 'pending' &&
+              m.p1 &&
+              m.p2
+            ) {
+
+              const winner =
+                oldResults.get(
+                  `${g.id}|${m.id}|${m.p1}|${m.p2}`
+                );
+
+
+              if (
+                winner === m.p1 ||
+                winner === m.p2
+              ) {
+
+                m.winner =
+                  winner;
+
+                m.loser =
+                  winner === m.p1
+                    ? m.p2
+                    : m.p1;
+
+                m.status =
+                  'resolved';
+              }
+            }
+          }
+        }
+
+
+        updateGroupFlow(g);
+      }
+
+
+      state.lowerGroups =
+        groups;
+    }
+
+
+    /*
+      ラウンド名。
+    */
+    function roundName(
+      r,
+      total,
+      lower = false
+    ) {
+
+      const left =
+        total - r;
+
+
+      if (!lower) {
+
+        if (left === 1) {
+          return '決勝';
+        }
+
+        if (left === 2) {
+          return '準決勝';
+        }
+
+        if (left === 3) {
+          return '準々決勝';
+        }
+
+        return `ラウンド${r + 1}`;
+      }
+
+
+      if (left === 1) {
+        return '逆決勝';
+      }
+
+      if (left === 2) {
+        return '逆準決勝';
+      }
+
+      return `逆ラウンド${r + 1}`;
+    }
+
+
+    /*
+      HTMLエスケープ。
+    */
+    function escapeHtml(value) {
+
+      return String(value)
+        .replaceAll(
+          '&',
+          '&amp;'
+        )
+        .replaceAll(
+          '<',
+          '&lt;'
+        )
+        .replaceAll(
+          '>',
+          '&gt;'
+        )
+        .replaceAll(
+          '"',
+          '&quot;'
+        )
+        .replaceAll(
+          "'",
+          '&#039;'
+        );
+    }
+
+
+    /*
+      試合カード生成。
+    */
+    function renderMatch(
+      match,
+      group = null
+    ) {
+
+      const resolved =
+        match.status === 'resolved';
+
+      const inactive =
+        match.status === 'inactive';
+
+
+      const cls = ['match'];
+
+
+      if (resolved) {
+        cls.push('resolved');
+      }
+
+      if (inactive) {
+        cls.push('inactive');
+      }
+
+      if (match.bye) {
+        cls.push('bye');
+      }
+
+
+      const clickHandler =
+        group
+          ? `window.__pickLower('${group.id}','${match.id}',PLAYER_INDEX)`
+          : `window.__pickMain('${match.id}',PLAYER_INDEX)`;
+
+
+      const row =
+        (player, index) => {
+
+          const hasPlayer =
+            !!player;
+
+
+          const win =
+            resolved &&
+            player &&
+            player === match.winner;
+
+
+          const loss =
+            resolved &&
+            player &&
+            player === match.loser;
+
+
+          const rowCls =
+            ['player-row'];
+
+
+          if (win) {
+            rowCls.push('winner');
+          }
+
+          if (loss) {
+            rowCls.push('loser');
+          }
+
+
+          const safe =
+            player
+              ? escapeHtml(player)
+              : '—';
+
+
+          const idxHandler =
+            clickHandler.replace(
+              'PLAYER_INDEX',
+              String(index)
+            );
+
+
+          return `
+            <div class="${rowCls.join(' ')}">
+
+              <button
+                class="pick-btn"
+                type="button"
+                aria-label="${
+                  player
+                    ? escapeHtml(player) +
+                      'を勝者にする'
+                    : '空き枠'
+                }"
+                ${
+                  !hasPlayer ||
+                  resolved ||
+                  inactive
+                    ? 'disabled'
+                    : ''
+                }
+                onclick="${
+                  hasPlayer &&
+                  !resolved &&
+                  !inactive
+                    ? idxHandler
+                    : ''
+                }"
+              >${
+                win
+                  ? '✓'
+                  : '◯'
+              }</button>
+
+              <div class="player-name">
+                ${safe}
+              </div>
+
+            </div>
+          `;
+        };
+
+
+      return `
+        <article
+          class="${cls.join(' ')}">
+
+          <div class="match-label">
+            <span>
+              ${escapeHtml(match.id)}
+            </span>
+
+            <span>
+              ${
+                resolved
+                  ? (
+                      match.bye
+                        ? 'BYE'
+                        : '確定'
+                    )
+                  : (
+                      inactive
+                        ? '空き'
+                        : '未確定'
+                    )
+              }
+            </span>
+          </div>
+
+
+          ${row(match.p1, 0)}
+          ${row(match.p2, 1)}
+
+
+          ${
+            match.bye
+              ? `
+                <div class="bye-note">
+                  自動通過（BYE）
+                </div>
+              `
+              : ''
+          }
+
+        </article>
+      `;
+    }
+
+
+    /*
+      本戦描画。
+    */
+    function renderMainBracket() {
+
+      const el =
+        $('#mainBracket');
+
+
+      const total =
+        state.mainRounds.length;
+
+
+      el.innerHTML =
+        state.mainRounds
+          .map(
+            (round, r) => `
+              <div class="round">
+
+                <div class="round-title">
+                  ${escapeHtml(
+                    roundName(
+                      r,
+                      total
+                    )
+                  )}
+
+                  <div class="round-sub">
+                    ${
+                      round.filter(
+                        m =>
+                          m.status !==
+                          'inactive'
+                      ).length
+                    } 試合
+                  </div>
+                </div>
+
+
+                <div class="round-matches">
+
+                  ${
+                    round
+                      .map(
+                        m =>
+                          renderMatch(m)
+                      )
+                      .join('')
+                  }
+
+                </div>
+
+              </div>
+            `
+          )
+          .join('');
+    }
+
+
+    /*
+      逆トーナメント描画。
+    */
+    function renderLowerGroups() {
+
+      const wrap =
+        $('#reverseWrap');
+
+      const el =
+        $('#lowerGroups');
+
+
+      if (!state.lowerEnabled) {
+
+        wrap.style.display =
+          'none';
+
+        el.innerHTML =
+          '';
+
+        return;
+      }
+
+
+      wrap.style.display =
+        'block';
+
+
+      if (!state.lowerGroups.length) {
+
+        el.innerHTML = `
+          <div class="empty">
+            本戦で敗者が確定すると、
+            ここに逆トーナメントが出る。
+          </div>
+        `;
+
+        return;
+      }
+
+
+      el.innerHTML =
+        state.lowerGroups
+          .map(
+            g => {
+
+              const total =
+                g.rounds.length;
+
+
+              return `
+                <div class="lower-group">
+
+                  <h3>
+                    第${
+                      g.id.replace(
+                        'lower-r',
+                        ''
+                      )
+                    }ラウンド敗者
+                    →
+                    ${
+                      g.startRank
+                    }–${
+                      g.endRank
+                    }位ゾーン
+                  </h3>
+
+
+                  <div class="lower-meta">
+                    ${
+                      g.players
+                        .map(
+                          escapeHtml
+                        )
+                        .join(' / ')
+                    }
+                  </div>
+
+
+                  <div class="bracket-scroll">
+
+                    <div class="bracket">
+
+                      ${
+                        g.rounds
+                          .map(
+                            (round, r) => `
+                              <div class="round">
+
+                                <div class="round-title">
+                                  ${escapeHtml(
+                                    roundName(
+                                      r,
+                                      total,
+                                      true
+                                    )
+                                  )}
+
+                                  <div class="round-sub">
+                                    逆トーナメント
+                                  </div>
+                                </div>
+
+
+                                <div class="round-matches">
+
+                                  ${
+                                    round
+                                      .map(
+                                        m =>
+                                          renderMatch(
+                                            m,
+                                            g
+                                          )
+                                      )
+                                      .join('')
+                                  }
+
+                                </div>
+
+                              </div>
+                            `
+                          )
+                          .join('')
+                      }
+
+                    </div>
+
+                  </div>
+
+                </div>
+              `;
+            }
+          )
+          .join('');
+    }
+
+
+    /*
+      本戦敗者グループを取得。
+    */
+    function getMainRoundLosses() {
+
+      const groups = [];
+
+      let eliminated =
+        0;
+
+
+      for (
+        const round of
+        state.mainRounds
+      ) {
+
+        const complete =
+          round.every(
+            m =>
+              m.status === 'resolved' ||
+              m.status === 'inactive'
+          );
+
+
+        if (!complete) {
+          break;
+        }
+
+
+        const losers =
+          round
+            .filter(
+              m =>
+                m.status === 'resolved' &&
+                m.loser
+            )
+            .map(
+              m =>
+                m.loser
+            );
+
+
+        if (losers.length) {
+
+          const start =
+            state.participants.length -
+            eliminated -
+            losers.length +
+            1;
+
+
+          groups.push({
+            players: losers,
+            start,
+            end:
+              start +
+              losers.length -
+              1
+          });
+
+
+          eliminated +=
+            losers.length;
+        }
+      }
+
+
+      return groups;
+    }
+
+
+    /*
+      逆トーナメント進行状況から
+      順位候補範囲を取得。
+    */
+    function collectLowerStatus(
+      group
+    ) {
+
+      const position =
+        new Map();
+
+
+      let eliminatedBefore =
+        0;
+
+
+      for (
+        const round of
+        group.rounds
+      ) {
+
+        const losses =
+          round
+            .filter(
+              m =>
+                m.status === 'resolved' &&
+                m.loser
+            )
+            .map(
+              m =>
+                m.loser
+            );
+
+
+        const lossCount =
+          losses.length;
+
+
+        for (
+          const name of losses
+        ) {
+
+          const from =
+            group.startRank +
+            eliminatedBefore +
+            1;
+
+
+          const to =
+            group.startRank +
+            eliminatedBefore +
+            Math.max(
+              1,
+              lossCount
+            );
+
+
+          position.set(
+            name,
+            `${from}|${to}`
+          );
+        }
+
+
+        eliminatedBefore +=
+          lossCount;
+      }
+
+
+      /*
+        逆トーナメント最終勝者は
+        その敗者グループでの最上位。
+      */
+      if (group.rounds.length) {
+
+        const final =
+          group.rounds[
+            group.rounds.length - 1
+          ].find(
+            m =>
+              m.status === 'resolved' &&
+              m.winner
+          );
+
+
+        if (final) {
+
+          position.set(
+            final.winner,
+            `${group.startRank}|${group.startRank}`
+          );
+        }
+      }
+
+
+      return position;
+    }
+
+
+    function rankText(
+      from,
+      to
+    ) {
+
+      return from === to
+        ? `${from}位`
+        : `${from}–${to}位`;
+    }
+
+
+    /*
+      順位欄を描画。
+    */
+    function renderRanking() {
+
+      const n =
+        state.participants.length;
+
+
+      const info =
+        new Map();
+
+
+      for (
+        const p of
+        state.participants
+      ) {
+
+        info.set(
+          p,
+          {
+            from: 1,
+            to: n,
+            note: '未確定'
+          }
+        );
+      }
+
+
+      /*
+        本戦決勝の結果から
+        1位・2位を確定。
+      */
+      const finalRound =
+        state.mainRounds[
+          state.mainRounds.length - 1
+        ] || [];
+
+
+      const final =
+        finalRound.find(
+          m =>
+            m.status === 'resolved' &&
+            m.winner
+        );
+
+
+      if (final) {
+
+        info.set(
+          final.winner,
+          {
+            from: 1,
+            to: 1,
+            note: '本戦優勝'
+          }
+        );
+
+
+        if (final.loser) {
+
+          info.set(
+            final.loser,
+            {
+              from: 2,
+              to: 2,
+              note: '決勝敗退'
+            }
+          );
+        }
+      }
+
+
+      /*
+        本戦で何ラウンド目に負けたかから
+        順位候補を設定。
+      */
+      const baseGroups =
+        getMainRoundLosses();
+
+
+      for (
+        const g of baseGroups
+      ) {
+
+        for (
+          const p of g.players
+        ) {
+
+          const old =
+            info.get(p);
+
+
+          if (
+            old &&
+            old.from === 1 &&
+            old.to === 1
+          ) {
+            continue;
+          }
+
+
+          if (
+            old &&
+            old.from === 2 &&
+            old.to === 2
+          ) {
+            continue;
+          }
+
+
+          info.set(
+            p,
+            {
+              from: g.start,
+              to: g.end,
+              note: '本戦敗退'
+            }
+          );
+        }
+      }
+
+
+      /*
+        下位決定がONなら
+        逆トーナメントによって
+        候補範囲を狭める。
+      */
+      if (state.lowerEnabled) {
+
+        for (
+          const g of state.lowerGroups
+        ) {
+
+          const pos =
+            collectLowerStatus(g);
+
+
+          for (
+            const [name, packed]
+            of pos.entries()
+          ) {
+
+            const [
+              from,
+              to
+            ] =
+              packed
+                .split('|')
+                .map(Number);
+
+
+            const old =
+              info.get(name);
+
+
+            if (
+              !old ||
+              (
+                from >= old.from &&
+                to <= old.to
+              )
+            ) {
+
+              info.set(
+                name,
+                {
+                  from,
+                  to,
+                  note:
+                    from === to
+                      ? '順位確定'
+                      : '下位トーナメント進行中'
+                }
+              );
+            }
+          }
+        }
+      }
+
+
+      /*
+        表示用に並べ替え。
+      */
+      const entries =
+        [...state.participants]
+          .map(
+            name => ({
+              name,
+              ...info.get(name)
+            })
+          );
+
+
+      entries.sort(
+        (a, b) => {
+
+          if (
+            a.from !==
+            b.from
+          ) {
+
+            return (
+              a.from -
+              b.from
+            );
+          }
+
+
+          if (
+            a.to !==
+            b.to
+          ) {
+
+            return (
+              a.to -
+              b.to
+            );
+          }
+
+
+          return (
+            state.participants.indexOf(
+              a.name
+            ) -
+            state.participants.indexOf(
+              b.name
+            )
+          );
+        }
+      );
+
+
+      $('#ranking').innerHTML =
+        entries
+          .map(
+            e => {
+
+              const exact =
+                e.from === e.to;
+
+
+              const cls =
+                exact &&
+                e.from === 1
+                  ? 'rank-item gold'
+                  : 'rank-item';
+
+
+              return `
+                <li class="${cls}">
+
+                  <div class="rank-no">
+                    ${
+                      rankText(
+                        e.from,
+                        e.to
+                      )
+                    }
+                  </div>
+
+                  <div class="rank-name">
+                    ${escapeHtml(e.name)}
+
+                    <span class="rank-tag">
+                      ${
+                        escapeHtml(
+                          e.note
+                        )
+                      }
+                    </span>
+                  </div>
+
+                </li>
+              `;
+            }
+          )
+          .join('');
+    }
+
+
+    /*
+      画面全体更新。
+    */
+    function renderAll() {
+
+      renderMainBracket();
+
+      renderLowerGroups();
+
+      renderRanking();
+
+
+      $('#statPlayers')
+        .textContent =
+        `${state.participants.length}人`;
+
+
+      $('#statSlots')
+        .textContent =
+        `${state.size}枠`;
+
+
+      $('#statRounds')
+        .textContent =
+        `${state.mainRounds.length}ラウンド`;
+
+
+      $('#statLower')
+        .textContent =
+        state.lowerEnabled
+          ? 'ON'
+          : 'OFF';
+
+
+      $('#seedDisplay')
+        .textContent =
+        state.seed;
+    }
+
+
+    /*
+      参加者入力チェック。
+    */
+    function validateNames(raw) {
+
+      const names =
+        raw
+          .split(/\r?\n/)
+          .map(
+            s =>
+              s.trim()
+          )
+          .filter(Boolean);
+
+
+      if (names.length < 2) {
+
+        return {
+          error:
+            '参加者を2人以上入力してね。'
+        };
+      }
+
+
+      const seen =
+        new Set();
+
+
+      for (
+        const name of names
+      ) {
+
+        if (
+          seen.has(name)
+        ) {
+
+          return {
+            error:
+              `同じ名前が重複しているよ：「${name}」`
+          };
+        }
+
+
+        seen.add(name);
+      }
+
+
+      return {
+        names
+      };
+    }
+
+
+    /*
+      トーナメント生成。
+    */
+    function generate() {
+
+      $('#status')
+        .textContent = '';
+
+
+      const checked =
+        validateNames(
+          $('#names').value
+        );
+
+
+      if (checked.error) {
+
+        $('#status')
+          .textContent =
+          checked.error;
+
+        return;
+      }
+
+
+      let seed =
+        $('#seed')
+          .value
+          .trim();
+
+
+      /*
+        シード未入力なら
+        暗号学的乱数で生成。
+      */
+      if (!seed) {
+        seed = randomSeed();
+      }
+
+
+      state.participants =
+        checked.names;
+
+
+      state.seed =
+        seed;
+
+
+      state.lowerEnabled =
+        $('#lowerEnabled')
+          .checked;
+
+
+      state.size =
+        nextPow2(
+          state.participants.length
+        );
+
+
+      buildMainBracket();
+
+      rebuildLowerGroups();
+
+
+      $('#generated')
+        .classList
+        .add('show');
+
+
+      renderAll();
+
+
+      $('#generated')
+        .scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+    }
+
+
+    /*
+      結果だけリセット。
+      参加者・シード・設定は維持。
+    */
+    function resetResults() {
+
+      if (
+        !state.participants.length
+      ) {
+        return;
+      }
+
+
+      buildMainBracket();
+
+      rebuildLowerGroups();
+
+      renderAll();
+    }
+
+
+    /*
+      本戦◯クリック用。
+    */
+    window.__pickMain =
+      function (
+        matchId,
+        playerIndex
+      ) {
+
+        for (
+          const round of
+          state.mainRounds
+        ) {
+
+          const m =
+            round.find(
+              x =>
+                x.id === matchId
+            );
+
+
+          if (m) {
+
+            resolveMain(
+              m,
+              playerIndex === 0
+                ? m.p1
+                : m.p2
+            );
+
+            return;
+          }
+        }
+      };
+
+
+    /*
+      逆トーナメント◯クリック用。
+    */
+    window.__pickLower =
+      function (
+        groupId,
+        matchId,
+        playerIndex
+      ) {
+
+        const group =
+          state.lowerGroups.find(
+            g =>
+              g.id === groupId
+          );
+
+
+        if (!group) {
+          return;
+        }
+
+
+        for (
+          const round of
+          group.rounds
+        ) {
+
+          const m =
+            round.find(
+              x =>
+                x.id === matchId
+            );
+
+
+          if (m) {
+
+            resolveLower(
+              group,
+              m,
+              playerIndex === 0
+                ? m.p1
+                : m.p2
+            );
+
+            return;
+          }
+        }
+      };
+
+
+    /*
+      ランダムシード生成。
+    */
+    $('#randomSeedBtn')
+      .addEventListener(
+        'click',
+        () => {
+
+          $('#seed').value =
+            randomSeed();
+        }
+      );
+
+
+    /*
+      8人サンプル。
+    */
+    $('#exampleBtn')
+      .addEventListener(
+        'click',
+        () => {
+
+          $('#names').value =
+            [
+              'A',
+              'B',
+              'C',
+              'D',
+              'E',
+              'F',
+              'G',
+              'H'
+            ].join('\n');
+
+
+          $('#lowerEnabled')
+            .checked = true;
+
+
+          if (
+            !$('#seed')
+              .value
+              .trim()
+          ) {
+
+            $('#seed').value =
+              randomSeed();
+          }
+
+
+          $('#status')
+            .textContent =
+            '8人の例を入れたよ。';
+        }
+      );
+
+
+    /*
+      生成。
+    */
+    $('#generateBtn')
+      .addEventListener(
+        'click',
+        generate
+      );
+
+
+    /*
+      リセット。
+    */
+    $('#resetResultsBtn')
+      .addEventListener(
+        'click',
+        resetResults
+      );
+
+
+    /*
+      シードコピー。
+    */
+    $('#copySeedBtn')
+      .addEventListener(
+        'click',
+        async () => {
+
+          try {
+
+            await navigator
+              .clipboard
+              .writeText(
+                state.seed
+              );
+
+
+            $('#copySeedBtn')
+              .textContent =
+              'コピー済み';
+
+
+            setTimeout(
+              () => {
+
+                $('#copySeedBtn')
+                  .textContent =
+                  'コピー';
+
+              },
+              1100
+            );
+
+          } catch {
+
+            $('#status')
+              .textContent =
+              'クリップボードにコピーできなかった。シードを手動でコピーしてね。';
+          }
+        }
+      );
+
+
+    /*
+      初期状態。
+    */
+    $('#names').value =
+      [
+        'A',
+        'B',
+        'C',
+        'D',
+        'E',
+        'F',
+        'G',
+        'H'
+      ].join('\n');
+
+
+    $('#lowerEnabled')
+      .checked = true;
+  </script>
+</body>
+</html>
