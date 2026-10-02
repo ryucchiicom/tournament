@@ -145,7 +145,7 @@
 
     .seed-row {
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: 1fr;
       gap: 8px;
     }
 
@@ -656,7 +656,7 @@
         </p>
       </div>
 
-      <div class="version">v1.0.0</div>
+      <div class="version">v1.0.1</div>
     </header>
 
 
@@ -687,7 +687,7 @@
 
           <div class="field">
             <label for="seed">
-              シード（空欄なら公正なランダムシードを自動生成）
+              シード（空欄なら自動でランダム生成）
             </label>
 
             <div class="seed-row">
@@ -695,21 +695,13 @@
                 id="seed"
                 type="text"
                 placeholder="例: 2026-10-02-大会A">
-
-              <button
-                class="btn"
-                id="randomSeedBtn"
-                type="button">
-                ランダム生成
-              </button>
             </div>
 
             <p class="hint">
-              種なし：
-              暗号学的乱数でシードを作成
-              →そのシードからFisher–Yatesで配置。
-              種あり：
-              同じ入力なら同じ配置を再現。
+              空欄：
+              暗号学的乱数で自動生成。
+              入力あり：
+              同じ参加者一覧・同じシードなら同じ配置を再現。
             </p>
           </div>
 
@@ -934,7 +926,7 @@
     'use strict';
 
 
-    const VERSION = '1.0.0';
+    const VERSION = '1.0.1';
 
 
     const $ = (sel) =>
@@ -1135,7 +1127,6 @@
         winner: null,
         loser: null,
         status: 'pending',
-        // pending / resolved / inactive
         bye: false
       };
     }
@@ -1225,10 +1216,6 @@
         );
 
 
-      /*
-        参加者だけでなくBYE枠も
-        一緒にシャッフル。
-      */
       const slots =
         shuffleFair(
           baseSlots,
@@ -1313,6 +1300,11 @@
     /*
       前ラウンドの勝者を
       次ラウンドへ流す。
+
+      2戦目以降は「前の2試合の勝者が
+      2人とも揃ったら対戦可能」にする。
+      片方しかまだ決まっていなくても、
+      その選手は保持する。
     */
     function updateMainFlow() {
 
@@ -1345,16 +1337,68 @@
             current[i];
 
 
-          if (!a || !b) {
+          /*
+            各前試合が確定していれば、
+            その勝者をそのまま流す。
+          */
+          m.p1 =
+            a &&
+            a.status === 'resolved'
+              ? (a.winner || null)
+              : null;
 
-            m.p1 = null;
-            m.p2 = null;
+          m.p2 =
+            b &&
+            b.status === 'resolved'
+              ? (b.winner || null)
+              : null;
+
+
+          /*
+            両方の勝者が揃っている。
+            → 通常の対戦待ち。
+          */
+          if (
+            m.p1 &&
+            m.p2
+          ) {
+
+            /*
+              すでにこの試合を決定していた場合は
+              結果を維持する。
+            */
+            if (
+              m.status !== 'resolved'
+            ) {
+
+              m.winner = null;
+              m.loser = null;
+
+              m.status =
+                'pending';
+
+              m.bye = false;
+            }
+
+            continue;
+          }
+
+
+          /*
+            まだ片方しか揃っていない。
+            空欄は「まだ相手が決まっていない」
+            だけなので、inactiveにはしない。
+          */
+          if (
+            m.p1 ||
+            m.p2
+          ) {
 
             m.winner = null;
             m.loser = null;
 
             m.status =
-              'inactive';
+              'pending';
 
             m.bye = false;
 
@@ -1363,96 +1407,15 @@
 
 
           /*
-            前の2試合のどちらかが未決定なら
-            この試合も未決定。
+            どちらもいない場合。
           */
-          if (
-            a.status === 'pending' ||
-            b.status === 'pending'
-          ) {
+          m.winner = null;
+          m.loser = null;
 
-            m.p1 =
-              a.status === 'resolved'
-                ? a.winner
-                : null;
+          m.status =
+            'inactive';
 
-            m.p2 =
-              b.status === 'resolved'
-                ? b.winner
-                : null;
-
-            m.winner = null;
-            m.loser = null;
-
-            m.status =
-              'pending';
-
-            m.bye = false;
-
-            continue;
-          }
-
-
-          m.p1 =
-            a.winner || null;
-
-          m.p2 =
-            b.winner || null;
-
-
-          if (
-            !m.p1 &&
-            !m.p2
-          ) {
-
-            m.status =
-              'inactive';
-
-            m.winner = null;
-            m.loser = null;
-
-            m.bye = false;
-
-          } else if (
-            m.p1 &&
-            !m.p2
-          ) {
-
-            m.status =
-              'resolved';
-
-            m.winner =
-              m.p1;
-
-            m.loser = null;
-
-            m.bye = true;
-
-          } else if (
-            !m.p1 &&
-            m.p2
-          ) {
-
-            m.status =
-              'resolved';
-
-            m.winner =
-              m.p2;
-
-            m.loser = null;
-
-            m.bye = true;
-
-          } else {
-
-            m.status =
-              'pending';
-
-            m.winner = null;
-            m.loser = null;
-
-            m.bye = false;
-          }
+          m.bye = false;
         }
       }
     }
@@ -1640,110 +1603,65 @@
             current[i];
 
 
-          if (!a || !b) {
-
-            m.p1 = null;
-            m.p2 = null;
-
-            m.winner = null;
-            m.loser = null;
-
-            m.status =
-              'inactive';
-
-            m.bye = false;
-
-            continue;
-          }
-
-
-          if (
-            a.status === 'pending' ||
-            b.status === 'pending'
-          ) {
-
-            m.p1 =
-              a.status === 'resolved'
-                ? a.winner
-                : null;
-
-            m.p2 =
-              b.status === 'resolved'
-                ? b.winner
-                : null;
-
-            m.winner = null;
-            m.loser = null;
-
-            m.status =
-              'pending';
-
-            m.bye = false;
-
-            continue;
-          }
-
-
           m.p1 =
-            a.winner || null;
+            a &&
+            a.status === 'resolved'
+              ? (a.winner || null)
+              : null;
 
           m.p2 =
-            b.winner || null;
+            b &&
+            b.status === 'resolved'
+              ? (b.winner || null)
+              : null;
 
 
           if (
-            !m.p1 &&
-            !m.p2
-          ) {
-
-            m.status =
-              'inactive';
-
-            m.winner = null;
-            m.loser = null;
-
-            m.bye = false;
-
-          } else if (
             m.p1 &&
-            !m.p2
-          ) {
-
-            m.status =
-              'resolved';
-
-            m.winner =
-              m.p1;
-
-            m.loser = null;
-
-            m.bye = true;
-
-          } else if (
-            !m.p1 &&
             m.p2
           ) {
 
-            m.status =
-              'resolved';
+            if (
+              m.status !== 'resolved'
+            ) {
 
-            m.winner =
-              m.p2;
+              m.winner = null;
+              m.loser = null;
 
-            m.loser = null;
+              m.status =
+                'pending';
 
-            m.bye = true;
+              m.bye = false;
+            }
 
-          } else {
+            continue;
+          }
 
-            m.status =
-              'pending';
+
+          if (
+            m.p1 ||
+            m.p2
+          ) {
 
             m.winner = null;
             m.loser = null;
 
+            m.status =
+              'pending';
+
             m.bye = false;
+
+            continue;
           }
+
+
+          m.status =
+            'inactive';
+
+          m.winner = null;
+          m.loser = null;
+
+          m.bye = false;
         }
       }
     }
@@ -1879,10 +1797,6 @@
           );
 
 
-        /*
-          このラウンドが終わっていないなら、
-          ここより後の敗者はまだ存在しない。
-        */
         if (!complete) {
           break;
         }
@@ -1927,10 +1841,6 @@
       }
 
 
-      /*
-        組み合わせがそのままなら
-        以前の結果を復元。
-      */
       for (
         const g of groups
       ) {
@@ -3167,20 +3077,6 @@
 
 
     /*
-      ランダムシード生成。
-    */
-    $('#randomSeedBtn')
-      .addEventListener(
-        'click',
-        () => {
-
-          $('#seed').value =
-            randomSeed();
-        }
-      );
-
-
-    /*
       8人サンプル。
     */
     $('#exampleBtn')
@@ -3203,17 +3099,6 @@
 
           $('#lowerEnabled')
             .checked = true;
-
-
-          if (
-            !$('#seed')
-              .value
-              .trim()
-          ) {
-
-            $('#seed').value =
-              randomSeed();
-          }
 
 
           $('#status')
