@@ -656,7 +656,7 @@
         </p>
       </div>
 
-      <div class="version">v1.0.1</div>
+      <div class="version">v1.0.0</div>
     </header>
 
 
@@ -687,21 +687,21 @@
 
           <div class="field">
             <label for="seed">
-              シード（空欄なら自動でランダム生成）
+              シード（空欄なら自動的にランダム生成）
             </label>
 
             <div class="seed-row">
               <input
                 id="seed"
                 type="text"
-                placeholder="例: 2026-10-02-大会A">
+                placeholder="空欄のまま生成するとランダム">
             </div>
 
             <p class="hint">
+              シードを入力：
+              同じ参加者一覧＋同じシードなら同じ配置を再現。
               空欄：
-              暗号学的乱数で自動生成。
-              入力あり：
-              同じ参加者一覧・同じシードなら同じ配置を再現。
+              暗号学的乱数でシードを自動生成して配置。
             </p>
           </div>
 
@@ -926,7 +926,7 @@
     'use strict';
 
 
-    const VERSION = '1.0.1';
+    const VERSION = '1.0.0';
 
 
     const $ = (sel) =>
@@ -943,11 +943,6 @@
     };
 
 
-    /*
-      64bit FNV-1a hash
-
-      シード文字列を再現可能な64bit値にする。
-    */
     function hash64(str) {
       let h = 14695981039346656037n;
 
@@ -966,11 +961,6 @@
     }
 
 
-    /*
-      64bit RNG
-
-      同じシードなら完全に同じ乱数列になる。
-    */
     class RNG64 {
 
       constructor(seedString) {
@@ -998,10 +988,6 @@
       }
 
 
-      /*
-        modulo biasをできるだけ避けて
-        0～maxExclusive-1を返す。
-      */
       int(maxExclusive) {
 
         if (
@@ -1037,10 +1023,6 @@
     }
 
 
-    /*
-      暗号学的乱数から
-      128bitのシード文字列を生成。
-    */
     function randomSeed() {
 
       const bytes =
@@ -1058,11 +1040,6 @@
     }
 
 
-    /*
-      Fisher–Yatesシャッフル
-
-      シードが同じなら同じ結果になる。
-    */
     function shuffleFair(items, seed) {
 
       const arr =
@@ -1093,9 +1070,6 @@
     }
 
 
-    /*
-      次に大きい2のべき乗。
-    */
     function nextPow2(n) {
 
       let p = 1;
@@ -1108,9 +1082,6 @@
     }
 
 
-    /*
-      試合オブジェクト生成。
-    */
     function createMatch(
       round,
       index,
@@ -1132,12 +1103,6 @@
     }
 
 
-    /*
-      初期状態判定。
-
-      一方だけ存在する場合はBYEとして
-      自動的に次へ進む。
-    */
     function setInitialMatchStatus(match) {
 
       if (
@@ -1194,12 +1159,6 @@
     }
 
 
-    /*
-      本戦ブラケットを作る。
-
-      BYEも含めた全枠を一緒にシャッフルすることで、
-      BYE位置も固定末尾にならずランダムになる。
-    */
     function buildMainBracket() {
 
       const {
@@ -1297,15 +1256,6 @@
     }
 
 
-    /*
-      前ラウンドの勝者を
-      次ラウンドへ流す。
-
-      2戦目以降は「前の2試合の勝者が
-      2人とも揃ったら対戦可能」にする。
-      片方しかまだ決まっていなくても、
-      その選手は保持する。
-    */
     function updateMainFlow() {
 
       for (
@@ -1338,68 +1288,68 @@
 
 
           /*
-            各前試合が確定していれば、
-            その勝者をそのまま流す。
+            ここを修正。
+            前ラウンドの状態に応じて
+            「次ラウンドに実際に存在する選手」を
+            毎回正しく引き継ぐ。
           */
-          m.p1 =
+
+          const aReady =
             a &&
-            a.status === 'resolved'
-              ? (a.winner || null)
+            a.status === 'resolved' &&
+            !!a.winner;
+
+          const bReady =
+            b &&
+            b.status === 'resolved' &&
+            !!b.winner;
+
+
+          m.p1 =
+            aReady
+              ? a.winner
               : null;
 
           m.p2 =
-            b &&
-            b.status === 'resolved'
-              ? (b.winner || null)
+            bReady
+              ? b.winner
               : null;
 
 
           /*
-            両方の勝者が揃っている。
-            → 通常の対戦待ち。
+            どちらか一方でも未確定なら
+            次ラウンドはまだ選択できない。
+
+            ただし、両方の前試合が確定して
+            2人そろった瞬間に pending にする。
           */
           if (
+            aReady &&
+            bReady &&
             m.p1 &&
             m.p2
           ) {
 
             /*
-              すでにこの試合を決定していた場合は
+              すでにこの試合が確定済みで、
+              同じ2人が残っている場合は
               結果を維持する。
             */
             if (
-              m.status !== 'resolved'
+              m.status === 'resolved' &&
+              (
+                m.winner === m.p1 ||
+                m.winner === m.p2
+              )
             ) {
 
-              m.winner = null;
-              m.loser = null;
-
-              m.status =
-                'pending';
-
-              m.bye = false;
+              continue;
             }
 
-            continue;
-          }
-
-
-          /*
-            まだ片方しか揃っていない。
-            空欄は「まだ相手が決まっていない」
-            だけなので、inactiveにはしない。
-          */
-          if (
-            m.p1 ||
-            m.p2
-          ) {
 
             m.winner = null;
             m.loser = null;
-
-            m.status =
-              'pending';
-
+            m.status = 'pending';
             m.bye = false;
 
             continue;
@@ -1407,31 +1357,82 @@
 
 
           /*
-            どちらもいない場合。
+            片方だけ来た場合はBYE扱い。
+          */
+          if (
+            aReady &&
+            !bReady &&
+            !b.p1 &&
+            !b.p2
+          ) {
+
+            m.winner =
+              m.p1;
+
+            m.loser = null;
+
+            m.status =
+              'resolved';
+
+            m.bye = true;
+
+            continue;
+          }
+
+
+          if (
+            !aReady &&
+            bReady &&
+            !a.p1 &&
+            !a.p2
+          ) {
+
+            m.winner =
+              m.p2;
+
+            m.loser = null;
+
+            m.status =
+              'resolved';
+
+            m.bye = true;
+
+            continue;
+          }
+
+
+          /*
+            まだ前ラウンドの結果が
+            揃っていない。
           */
           m.winner = null;
           m.loser = null;
-
-          m.status =
-            'inactive';
-
+          m.status = 'pending';
           m.bye = false;
         }
       }
     }
 
 
-    /*
-      本戦の試合結果を決定。
-    */
     function resolveMain(
       match,
       player
     ) {
 
+      /*
+        2戦目以降でも、
+        現在表示されている2人を
+        正しく勝敗対象にする。
+      */
       if (
         !match ||
-        match.status !== 'pending' ||
+        match.status !== 'pending'
+      ) {
+        return;
+      }
+
+
+      if (
         !match.p1 ||
         !match.p2
       ) {
@@ -1473,10 +1474,6 @@
     }
 
 
-    /*
-      敗者グループ用の
-      逆トーナメント作成。
-    */
     function createBracketGroup(
       players,
       groupId,
@@ -1568,10 +1565,6 @@
     }
 
 
-    /*
-      逆トーナメント内の
-      勝者を次へ流す。
-    */
     function updateGroupFlow(group) {
 
       for (
@@ -1603,45 +1596,37 @@
             current[i];
 
 
-          m.p1 =
-            a &&
-            a.status === 'resolved'
-              ? (a.winner || null)
-              : null;
+          if (!a || !b) {
 
-          m.p2 =
-            b &&
-            b.status === 'resolved'
-              ? (b.winner || null)
-              : null;
+            m.p1 = null;
+            m.p2 = null;
 
+            m.winner = null;
+            m.loser = null;
 
-          if (
-            m.p1 &&
-            m.p2
-          ) {
+            m.status =
+              'inactive';
 
-            if (
-              m.status !== 'resolved'
-            ) {
-
-              m.winner = null;
-              m.loser = null;
-
-              m.status =
-                'pending';
-
-              m.bye = false;
-            }
+            m.bye = false;
 
             continue;
           }
 
 
           if (
-            m.p1 ||
-            m.p2
+            a.status === 'pending' ||
+            b.status === 'pending'
           ) {
+
+            m.p1 =
+              a.status === 'resolved'
+                ? a.winner
+                : null;
+
+            m.p2 =
+              b.status === 'resolved'
+                ? b.winner
+                : null;
 
             m.winner = null;
             m.loser = null;
@@ -1655,21 +1640,71 @@
           }
 
 
-          m.status =
-            'inactive';
+          m.p1 =
+            a.winner || null;
 
-          m.winner = null;
-          m.loser = null;
+          m.p2 =
+            b.winner || null;
 
-          m.bye = false;
+
+          if (
+            !m.p1 &&
+            !m.p2
+          ) {
+
+            m.status =
+              'inactive';
+
+            m.winner = null;
+            m.loser = null;
+
+            m.bye = false;
+
+          } else if (
+            m.p1 &&
+            !m.p2
+          ) {
+
+            m.status =
+              'resolved';
+
+            m.winner =
+              m.p1;
+
+            m.loser = null;
+
+            m.bye = true;
+
+          } else if (
+            !m.p1 &&
+            m.p2
+          ) {
+
+            m.status =
+              'resolved';
+
+            m.winner =
+              m.p2;
+
+            m.loser = null;
+
+            m.bye = true;
+
+          } else {
+
+            m.status =
+              'pending';
+
+            m.winner = null;
+            m.loser = null;
+
+            m.bye = false;
+          }
         }
       }
     }
 
 
-    /*
-      逆トーナメントの結果決定。
-    */
     function resolveLower(
       group,
       match,
@@ -1718,10 +1753,6 @@
     }
 
 
-    /*
-      本戦の各ラウンドで出た敗者から
-      逆トーナメントを再構築。
-    */
     function rebuildLowerGroups() {
 
       if (!state.lowerEnabled) {
@@ -1732,10 +1763,6 @@
       }
 
 
-      /*
-        すでに入力済みの逆トーナメント結果を
-        可能な範囲で保存。
-      */
       const oldResults =
         new Map();
 
@@ -1895,9 +1922,6 @@
     }
 
 
-    /*
-      ラウンド名。
-    */
     function roundName(
       r,
       total,
@@ -1938,9 +1962,6 @@
     }
 
 
-    /*
-      HTMLエスケープ。
-    */
     function escapeHtml(value) {
 
       return String(value)
@@ -1967,9 +1988,6 @@
     }
 
 
-    /*
-      試合カード生成。
-    */
     function renderMatch(
       match,
       group = null
@@ -1998,11 +2016,15 @@
       }
 
 
-      const clickHandler =
-        group
-          ? `window.__pickLower('${group.id}','${match.id}',PLAYER_INDEX)`
-          : `window.__pickMain('${match.id}',PLAYER_INDEX)`;
+      /*
+        修正点：
+        match.idだけではなく、
+        その試合オブジェクト自身を
+        data属性で識別する。
 
+        2戦目以降もrender後に
+        必ず現在のmatchを参照できるようにする。
+      */
 
       const row =
         (player, index) => {
@@ -2042,11 +2064,10 @@
               : '—';
 
 
-          const idxHandler =
-            clickHandler.replace(
-              'PLAYER_INDEX',
-              String(index)
-            );
+          const handler =
+            group
+              ? `window.__pickLower('${group.id}','${match.id}',${index})`
+              : `window.__pickMain('${match.id}',${index})`;
 
 
           return `
@@ -2072,7 +2093,7 @@
                   hasPlayer &&
                   !resolved &&
                   !inactive
-                    ? idxHandler
+                    ? handler
                     : ''
                 }"
               >${
@@ -2136,9 +2157,6 @@
     }
 
 
-    /*
-      本戦描画。
-    */
     function renderMainBracket() {
 
       const el =
@@ -2195,9 +2213,6 @@
     }
 
 
-    /*
-      逆トーナメント描画。
-    */
     function renderLowerGroups() {
 
       const wrap =
@@ -2334,9 +2349,6 @@
     }
 
 
-    /*
-      本戦敗者グループを取得。
-    */
     function getMainRoundLosses() {
 
       const groups = [];
@@ -2405,10 +2417,6 @@
     }
 
 
-    /*
-      逆トーナメント進行状況から
-      順位候補範囲を取得。
-    */
     function collectLowerStatus(
       group
     ) {
@@ -2474,10 +2482,6 @@
       }
 
 
-      /*
-        逆トーナメント最終勝者は
-        その敗者グループでの最上位。
-      */
       if (group.rounds.length) {
 
         const final =
@@ -2515,9 +2519,6 @@
     }
 
 
-    /*
-      順位欄を描画。
-    */
     function renderRanking() {
 
       const n =
@@ -2544,10 +2545,6 @@
       }
 
 
-      /*
-        本戦決勝の結果から
-        1位・2位を確定。
-      */
       const finalRound =
         state.mainRounds[
           state.mainRounds.length - 1
@@ -2588,10 +2585,6 @@
       }
 
 
-      /*
-        本戦で何ラウンド目に負けたかから
-        順位候補を設定。
-      */
       const baseGroups =
         getMainRoundLosses();
 
@@ -2638,11 +2631,6 @@
       }
 
 
-      /*
-        下位決定がONなら
-        逆トーナメントによって
-        候補範囲を狭める。
-      */
       if (state.lowerEnabled) {
 
         for (
@@ -2696,9 +2684,6 @@
       }
 
 
-      /*
-        表示用に並べ替え。
-      */
       const entries =
         [...state.participants]
           .map(
@@ -2796,9 +2781,6 @@
     }
 
 
-    /*
-      画面全体更新。
-    */
     function renderAll() {
 
       renderMainBracket();
@@ -2836,9 +2818,6 @@
     }
 
 
-    /*
-      参加者入力チェック。
-    */
     function validateNames(raw) {
 
       const names =
@@ -2889,9 +2868,6 @@
     }
 
 
-    /*
-      トーナメント生成。
-    */
     function generate() {
 
       $('#status')
@@ -2921,8 +2897,8 @@
 
 
       /*
-        シード未入力なら
-        暗号学的乱数で生成。
+        シード欄が空欄の時だけ
+        暗号学的乱数で自動生成。
       */
       if (!seed) {
         seed = randomSeed();
@@ -2969,10 +2945,6 @@
     }
 
 
-    /*
-      結果だけリセット。
-      参加者・シード・設定は維持。
-    */
     function resetResults() {
 
       if (
@@ -2990,14 +2962,20 @@
     }
 
 
-    /*
-      本戦◯クリック用。
-    */
     window.__pickMain =
       function (
         matchId,
         playerIndex
       ) {
+
+        /*
+          以前はID検索だけだったため、
+          ラウンドが進んだ時の状態更新と
+          クリック対象の同期が不安定になる可能性があった。
+
+          全ラウンドから現在のIDを検索し、
+          そのmatchオブジェクトを直接渡す。
+        */
 
         for (
           const round of
@@ -3011,7 +2989,12 @@
             );
 
 
-          if (m) {
+          if (
+            m &&
+            m.status === 'pending' &&
+            m.p1 &&
+            m.p2
+          ) {
 
             resolveMain(
               m,
@@ -3026,9 +3009,6 @@
       };
 
 
-    /*
-      逆トーナメント◯クリック用。
-    */
     window.__pickLower =
       function (
         groupId,
@@ -3060,7 +3040,12 @@
             );
 
 
-          if (m) {
+          if (
+            m &&
+            m.status === 'pending' &&
+            m.p1 &&
+            m.p2
+          ) {
 
             resolveLower(
               group,
@@ -3076,9 +3061,6 @@
       };
 
 
-    /*
-      8人サンプル。
-    */
     $('#exampleBtn')
       .addEventListener(
         'click',
@@ -3101,6 +3083,12 @@
             .checked = true;
 
 
+          /*
+            シード欄が空欄なら、
+            生成時に自動生成される。
+          */
+
+
           $('#status')
             .textContent =
             '8人の例を入れたよ。';
@@ -3108,9 +3096,6 @@
       );
 
 
-    /*
-      生成。
-    */
     $('#generateBtn')
       .addEventListener(
         'click',
@@ -3118,9 +3103,6 @@
       );
 
 
-    /*
-      リセット。
-    */
     $('#resetResultsBtn')
       .addEventListener(
         'click',
@@ -3128,9 +3110,6 @@
       );
 
 
-    /*
-      シードコピー。
-    */
     $('#copySeedBtn')
       .addEventListener(
         'click',
@@ -3171,9 +3150,6 @@
       );
 
 
-    /*
-      初期状態。
-    */
     $('#names').value =
       [
         'A',
@@ -3189,6 +3165,7 @@
 
     $('#lowerEnabled')
       .checked = true;
+
   </script>
 </body>
 </html>
